@@ -1,0 +1,6 @@
+# vscode
+.vscode
+
+# debug
+my-wget
+*.o
