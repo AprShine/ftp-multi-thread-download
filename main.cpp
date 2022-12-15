@@ -16,7 +16,7 @@
 using namespace std;
 
 const char *program_name;
-const int port=21;
+const int sc_port=21;
 
 void output_info(ostream & os,int exit_code){
     os<<"Usage:"<<program_name<<" options [filename]"<<endl;
@@ -45,8 +45,8 @@ int main(int argc, char *argv[]){
 	const char* output_filename = NULL;
     //参数指定服务器ip地址或DNS地址
     const char* server_addr=NULL;
-    //参数指定用户名
-    const char* server_name=NULL;
+    //参数指定用户名,如果没写的话默认是匿名模式
+    const char* server_name="anonymous";
     //参数指定密码
     const char* server_pwd=NULL;
     //参数指定ftp对应文件名
@@ -88,7 +88,9 @@ int main(int argc, char *argv[]){
         output_info(cout,1);
     }
     ftp f=ftp();
-    f.ftp_connect(server_addr,port);
+    if(f.ftp_connect(server_addr,sc_port)){//创建ftp链接成功
+        
+    }
     f.ftp_disconnect();
     return 0;
 }
