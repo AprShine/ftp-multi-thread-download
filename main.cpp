@@ -10,9 +10,12 @@
  */
 
 #include "include/ftp.hpp"
+#include "include/m_thread.hpp"
 #include <iostream>
-#include <getopt.h>
 #include <fstream>
+#include <string.h>
+#include <getopt.h>
+
 using namespace std;
 
 const char *program_name;
@@ -28,8 +31,61 @@ void output_info(ostream & os,int exit_code){
 	exit(exit_code);
 }
 
-int get_file(const char* server_ip,const int &port,const char *username,const char *pwd,const char *remote_fname,const char *local_fname){
+bool get_file(const char* server_ip,const int &port,const char *username,const char *pwd,const char *remote_fname,const char *local_fname){
     
+    //接收信息的缓存
+    char recv_buf[FTP_BUF_LEN]={0};
+    //FTP 控制指令
+    string ftp_cmd;
+    //ftp 控制TCP链接
+    ftp control_link=ftp();
+
+    if(!control_link.ftp_connect(server_ip,port)){
+        //链接sock失败
+        cout<<"error:can't connect ftp server."<<endl;
+        return false;
+    }
+    if(control_link.ftp_recv(recv_buf,FTP_BUF_LEN)>0){
+        cout<<"get the server msg:"<<recv_buf;
+    }else{
+        cout<<"error:can't recv server login msg."<<endl;
+        return false;
+    }
+
+    ftp_cmd="USER ";
+    ftp_cmd.append(username).append("\n");
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        cout<<"error:send username "<<username<<" failed:"<<recv_buf;
+        return false;
+    }
+    if(username=="ftp"||username=="anonymous"){
+        cout<<"-----------------using anonymous model.------------------"<<endl;
+    }
+
+    ftp_cmd="PASS ";
+    ftp_cmd.append(pwd).append("\n");
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        cout<<"error:login failed:"<<recv_buf;
+        return false;
+    }
+
+    ftp_cmd="REST 100\n";
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        cout<<"server can't use multi-thread download."<<endl;
+    }else{
+        cout<<"----------server can use multi-thread download.----------"<<endl;
+    }
+
+    ftp_cmd="PASV\n";
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        return false;
+    }
+
+    return true;
 }
 
 int main(int argc, char *argv[]){
@@ -52,7 +108,7 @@ int main(int argc, char *argv[]){
     //参数指定用户名,如果没写的话默认是匿名模式
     const char* server_name="ftp";
     //参数指定密码
-    const char* server_pwd=NULL;
+    const char* server_pwd="";
     //参数指定ftp对应文件名
     const char* filename=NULL;
 	//保存程序名
@@ -91,6 +147,7 @@ int main(int argc, char *argv[]){
         cout<<"\nseem can't get hostname or filename\n\n";
         output_info(cout,1);
     }
+    //获取到相应的文件,并保存在当前路径中
     get_file(server_addr,sc_port,server_name,server_pwd,filename,output_filename);
     return 0;
 }

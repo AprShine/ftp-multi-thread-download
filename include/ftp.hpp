@@ -67,7 +67,7 @@ public:
      * @return true 成功对话一次
      * @return false 对话失败
      */
-    bool ftp_talk(char *send_buf,const int & send_len, char *recv_buf, const int & recv_len);
+    bool ftp_talk(const char *send_buf,const int & send_len, char *recv_buf, const int & recv_len);
     /**
      * @brief Get the sockfd object
      * 

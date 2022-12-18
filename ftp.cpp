@@ -90,7 +90,7 @@ int ftp::ftp_send(const char *send_buf,const int &send_len){
         int cnt_send=0;
         while(already_send!=send_len){
             cnt_send=send(ftp_sockfd,send_buf,send_len,0);//等价于write
-            if(cnt_send=-1){
+            if(cnt_send==-1){
                 cout<<"error:send msg error."<<endl;
                 return false;
             }
@@ -122,13 +122,13 @@ int ftp::ftp_recv(char *recv_buf,const int & recv_len){
     return -1;
 }
 
-bool ftp::ftp_talk(char *send_buf,const int & send_len, char *recv_buf, const int & recv_len){
+bool ftp::ftp_talk(const char *send_buf,const int & send_len, char *recv_buf, const int & recv_len){
     if(ftp_send(send_buf,send_len)==-1){
         cout<<"tcp talk failed because send failure."<<endl;
         return false;
     }
     if(ftp_recv(recv_buf,recv_len)>0){
-        cout<<"tcp talk with response:"<<recv_buf<<endl;
+        cout<<"tcp talk with response:"<<recv_buf;
     }else{
         cout<<"tcp talk with no response"<<endl;
         return false;
