@@ -71,10 +71,10 @@ bool ftp::ftp_disconnect(){
     return false;
 }
 
-bool ftp::ftp_send(const char *send_buf,const int &send_len){
+int ftp::ftp_send(const char *send_buf,const int &send_len){
     if(ftp_sockfd==-1){//套接字未初始化
         cout<<"error:socket not init."<<endl;
-        return false;
+        return -1;
     }
     timeval timeout={
         .tv_sec=1,
@@ -96,8 +96,46 @@ bool ftp::ftp_send(const char *send_buf,const int &send_len){
             }
             already_send+=cnt_send;
         }
-        return true;
+        return already_send;
     }
     //超时了
+        return -1;
+}
+
+int ftp::ftp_recv(char *recv_buf,const int & recv_len){
+    if(ftp_sockfd==-1){//套接字未初始化
+        cout<<"error:socket not init."<<endl;
         return false;
+    }
+    timeval timeout={
+        .tv_sec=1,
+        .tv_usec=0
+    };
+    fd_set read_set;
+    FD_ZERO(&read_set);
+    FD_SET(ftp_sockfd,&read_set);
+
+    if(select(ftp_sockfd+1,&read_set,NULL,NULL,&timeout)>0){
+        return recv(ftp_sockfd,recv_buf,recv_len,0);
+    }
+
+    return -1;
+}
+
+bool ftp::ftp_talk(char *send_buf,const int & send_len, char *recv_buf, const int & recv_len){
+    if(ftp_send(send_buf,send_len)==-1){
+        cout<<"tcp talk failed because send failure."<<endl;
+        return false;
+    }
+    if(ftp_recv(recv_buf,recv_len)>0){
+        cout<<"tcp talk with response:"<<recv_buf<<endl;
+    }else{
+        cout<<"tcp talk with no response"<<endl;
+        return false;
+    }
+    return true;
+}
+
+int ftp::get_sockfd(){
+    return this->ftp_sockfd;
 }

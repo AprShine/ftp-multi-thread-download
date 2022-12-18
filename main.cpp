@@ -28,6 +28,10 @@ void output_info(ostream & os,int exit_code){
 	exit(exit_code);
 }
 
+int get_file(const char* server_ip,const int &port,const char *username,const char *pwd,const char *remote_fname,const char *local_fname){
+    
+}
+
 int main(int argc, char *argv[]){
     //全部段选项的合并字符，":"表示带有附加参数
 	const char* const short_opts = "hs:u:p:o:";
@@ -46,7 +50,7 @@ int main(int argc, char *argv[]){
     //参数指定服务器ip地址或DNS地址
     const char* server_addr=NULL;
     //参数指定用户名,如果没写的话默认是匿名模式
-    const char* server_name="anonymous";
+    const char* server_name="ftp";
     //参数指定密码
     const char* server_pwd=NULL;
     //参数指定ftp对应文件名
@@ -87,10 +91,6 @@ int main(int argc, char *argv[]){
         cout<<"\nseem can't get hostname or filename\n\n";
         output_info(cout,1);
     }
-    ftp f=ftp();
-    if(f.ftp_connect(server_addr,sc_port)){//创建ftp链接成功
-        
-    }
-    f.ftp_disconnect();
+    get_file(server_addr,sc_port,server_name,server_pwd,filename,output_filename);
     return 0;
 }
