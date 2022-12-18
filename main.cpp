@@ -1,7 +1,7 @@
 /**
  * @file main.cpp
  * @author aprshine (you@domain.com)
- * @brief 目标是与ftp服务器建立sock链接,并实现多线程下载,其他功能暂时不考虑
+ * @brief 目标是与ftp服务器建立sock链接,并实现多线程下载(关键在于是否支持续传),其他功能暂时不考虑
  * @version 0.1
  * @date 2022-12-12
  * 
@@ -51,7 +51,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
         cout<<"error:can't recv server login msg."<<endl;
         return false;
     }
-
+    //传输用户名
     ftp_cmd="USER ";
     ftp_cmd.append(username).append("\n");
     memset(recv_buf,0,FTP_BUF_LEN);
@@ -62,7 +62,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     if(username=="ftp"||username=="anonymous"){
         cout<<"-----------------using anonymous model.------------------"<<endl;
     }
-
+    //传输密码
     ftp_cmd="PASS ";
     ftp_cmd.append(pwd).append("\n");
     memset(recv_buf,0,FTP_BUF_LEN);
@@ -70,7 +70,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
         cout<<"error:login failed:"<<recv_buf;
         return false;
     }
-
+    //测试是否支持续传
     ftp_cmd="REST 100\n";
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
@@ -78,7 +78,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     }else{
         cout<<"----------server can use multi-thread download.----------"<<endl;
     }
-
+    //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
     ftp_cmd="PASV\n";
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
