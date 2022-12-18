@@ -94,15 +94,15 @@ int main(int argc, char *argv[]){
 	//长选项数组，定义在前面注释已经标明
 	const struct option long_opts[] =
 	{
-		{"help",0,NULL,'h'},
+        {"help",0,NULL,'h'},
         {"src",1,NULL,'s'},
         {"username",1,NULL,'u'},
         {"password",1,NULL,'p'},
-		{"output",1,NULL,'o'},
-		{NULL,0,NULL,0}
+        {"output",1,NULL,'o'},
+        {NULL,0,NULL,0}
 	};
 	//参数指定的输出文件名
-	const char* output_filename = NULL;
+    const char* output_filename = NULL;
     //参数指定服务器ip地址或DNS地址
     const char* server_addr=NULL;
     //参数指定用户名,如果没写的话默认是匿名模式
@@ -112,18 +112,18 @@ int main(int argc, char *argv[]){
     //参数指定ftp对应文件名
     const char* filename=NULL;
 	//保存程序名
-	program_name = argv[0];
+    program_name = argv[0];
 	//如果为长选项，第五个参数输出该选项在长选项数组中的索引
-	int opt = getopt_long(argc,argv,short_opts,long_opts,NULL);
+    int opt = getopt_long(argc,argv,short_opts,long_opts,NULL);
 	//使用选项的返回值单独处理 返回值为获取到的参数,附加参数由optarg提供
 	//使用循环处理所有的参数
     while(opt != -1)
 	{
-		switch(opt){
-		case 'h'://-h 或 --help
-			output_info(cout,0);
-		case 'o'://-o 或 --output，附加参数由optarg提供
-			output_filename = optarg; 
+        switch(opt){
+        case 'h'://-h 或 --help
+            output_info(cout,0);
+        case 'o'://-o 或 --output，附加参数由optarg提供
+            output_filename = optarg; 
             break;
         case 's'://-s 服务器源地址
             server_addr = optarg;
@@ -134,13 +134,13 @@ int main(int argc, char *argv[]){
         case 'p'://-p ftp服务器密码
             server_pwd = optarg;
             break;
-		case '?'://用户输入了无效参数
-			output_info(cerr,1);
-		default://未知错误
-			abort();
-		}
-		opt = getopt_long(argc,argv,short_opts,long_opts,NULL);
-	}
+        case '?'://用户输入了无效参数
+            output_info(cerr,1);
+        default://未知错误
+            abort();
+        }
+        opt = getopt_long(argc,argv,short_opts,long_opts,NULL);
+    }
     if(optind<argc) filename=argv[optind];
     //未检测到有用参数
     if(server_addr==NULL||filename==NULL){
