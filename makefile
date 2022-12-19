@@ -1,5 +1,5 @@
 INCLUDE=-I ./
-LIB=-L ./lib
+LIB=-lpthread
 TARGET=my-wget
 OBJ=main.o ftp.o m_thread.o
 
@@ -8,7 +8,7 @@ OBJ=main.o ftp.o m_thread.o
 
 ${TARGET}:${OBJ}
 	@echo "============开始编译============"
-	g++ -o $@ $?
+	g++ -o $@ $? $(LIB)
 	rm -f ${OBJ}
 	@echo "============编译结束============"
 

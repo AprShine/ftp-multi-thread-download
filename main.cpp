@@ -31,7 +31,33 @@ void output_info(ostream & os,int exit_code){
 	exit(exit_code);
 }
 
-bool get_file(const char* server_ip,const int &port,const char *username,const char *pwd,const char *remote_fname,const char *local_fname){
+bool parse_link(const string &ftp_msg, string &ip, int &port){
+    //PASV MODE 的端口号为p1*256+p2
+    if(ftp_msg.empty()) return false;
+    size_t link_start=ftp_msg.find('(');
+    size_t link_end=ftp_msg.find(')');
+    string link_info=ftp_msg.substr(link_start+1,link_end-link_start-1);
+    string port1,port2;
+    int cnt=0,index;
+    for(int i=0;i<link_info.length();i++){
+        if(link_info[i]==','){
+            cnt++;
+            link_info[i]='.';
+            if(cnt==4){
+                ip=link_info.substr(0,i);
+                index=i;
+            }
+            if(cnt==5){
+                port1=link_info.substr(index+1,i-index-1);
+                port2=link_info.substr(i+1,link_info.length()-i-1);
+            }
+        }
+    }
+    port=atoi(port1.c_str())*256+atoi(port2.c_str());
+    return true;
+}
+
+bool get_file(const char* server_ip,const int &port,const char *username,const char *pwd,const string &remote_dir,const char *local_fname){
     
     //接收信息的缓存
     char recv_buf[FTP_BUF_LEN]={0};
@@ -67,7 +93,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     ftp_cmd.append(pwd).append("\n");
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
-        cout<<"error:login failed:"<<recv_buf;
+        cout<<"error:login failed because:"<<recv_buf;
         return false;
     }
     //测试是否支持续传
@@ -75,15 +101,55 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
         cout<<"server can't use multi-thread download."<<endl;
+        return false;
     }else{
         cout<<"----------server can use multi-thread download.----------"<<endl;
     }
-    //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
-    ftp_cmd="PASV\n";
+    //解析文件路径,改变工作目录
+    string remote_fname=remote_dir;
+    while(remote_fname.find('/')!=-1){
+        ftp_cmd="CWD ";
+        ftp_cmd.append(remote_fname.substr(0,remote_fname.find('/'))).append("\n");
+        remote_fname=remote_fname.substr(remote_fname.find('/')+1,remote_fname.length()-remote_fname.find("/")-1);
+        memset(recv_buf,0,FTP_BUF_LEN);
+        if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+            cout<<"error:can't get server msg."<<endl;
+            return false;
+        }   
+        else if(recv_buf[0]=='5'){
+            cout<<"error:can't find the dictionary."<<endl;
+            return false;
+        }
+    }
+    //获取文件大小
+    ftp_cmd="SIZE ";
+    ftp_cmd.append(remote_fname).append("\n");
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        cout<<"error:can't get server msg."<<endl;
         return false;
     }
+    else if(recv_buf[0]=='5'){
+        cout<<"error:can't get th file size."<<endl;
+        return false;
+    }
+
+
+    // //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
+    // ftp_cmd="PASV\n";
+    // memset(recv_buf,0,FTP_BUF_LEN);
+    // if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+    //     return false;
+    // }
+    // //解析数据连接
+    // string data_ip;
+    // int data_port;
+    // if(!parse_link(recv_buf,data_ip,data_port)){
+    //     cout<<"error:can't parse pasv link"<<endl;
+    //     return false;
+    // }
+    // cout<<"get data sock:"<<data_ip<<':'<<data_port<<endl;
+    
 
     return true;
 }
@@ -148,6 +214,10 @@ int main(int argc, char *argv[]){
         output_info(cout,1);
     }
     //获取到相应的文件,并保存在当前路径中
-    get_file(server_addr,sc_port,server_name,server_pwd,filename,output_filename);
+    if(get_file(server_addr,sc_port,server_name,server_pwd,filename,output_filename)){
+        cout<<"download success."<<endl;
+    }else{
+        cout<<"download fail."<<endl;
+    }
     return 0;
 }
