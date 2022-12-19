@@ -133,7 +133,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
         cout<<"error:can't get th file size."<<endl;
         return false;
     }
-
+    //下面可以使用多线程了
 
     // //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
     // ftp_cmd="PASV\n";
@@ -177,6 +177,8 @@ int main(int argc, char *argv[]){
     const char* server_pwd="";
     //参数指定ftp对应文件名
     const char* filename=NULL;
+    //线程数量,最大为16
+    const char* thread_num="1";
 	//保存程序名
     program_name = argv[0];
 	//如果为长选项，第五个参数输出该选项在长选项数组中的索引
