@@ -10,16 +10,20 @@
  */
 
 #include "include/ftp.hpp"
-#include "include/m_thread.hpp"
 #include <iostream>
 #include <fstream>
+#include <thread>
+#include <mutex>
 #include <string.h>
 #include <getopt.h>
+
+#define MAX_THREAD_NUM 8
 
 using namespace std;
 
 const char *program_name;
 const int sc_port=21;
+mutex download_mutex;
 
 void output_info(ostream & os,int exit_code){
     os<<"Usage:"<<program_name<<" options [filename]"<<endl;
@@ -28,6 +32,7 @@ void output_info(ostream & os,int exit_code){
     os<<"-u --username:the ftp server's username"<<endl;
 	os<<"-p --password:the ftp server's password"<<endl;
 	os<<"-o --output:the save file's name <default filename>"<<endl;
+    os<<"-t --thread:the download thread num"<<endl;
 	exit(exit_code);
 }
 
@@ -57,7 +62,32 @@ bool parse_link(const string &ftp_msg, string &ip, int &port){
     return true;
 }
 
-bool get_file(const char* server_ip,const int &port,const char *username,const char *pwd,const string &remote_dir,const char *local_fname){
+bool thread_download(ftp &control_link,string filename,string local_fname,const int &offset,const int &size,const int &index){
+    string ftp_cmd;
+    char recv_buf[FTP_BUF_LEN]={0};
+    //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
+    ftp_cmd="PASV\n";
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        return false;
+    }
+    //解析数据连接
+    string data_ip;
+    int data_port;
+    if(!parse_link(recv_buf,data_ip,data_port)){
+        cout<<"error:can't parse pasv link"<<endl;
+        return false;
+    }
+    cout<<"Thread "<<index<<" get data sock:"<<data_ip<<':'<<data_port<<endl;
+    ftp data_link=ftp();
+    if(!data_link.ftp_connect(data_ip.c_str(),data_port)){
+        cout<<"error:ftp data link open fail"<<endl;
+        return false;
+    }
+    return true;
+}
+
+bool get_file(const char* server_ip,const int &port,const char *username,const char *pwd,const string &remote_dir,const char *local_fname,const int &thread_num){
     
     //接收信息的缓存
     char recv_buf[FTP_BUF_LEN]={0};
@@ -133,30 +163,34 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
         cout<<"error:can't get th file size."<<endl;
         return false;
     }
+    string size_msg=recv_buf;
+    int file_size=atoi(size_msg.substr(size_msg.find(' ')+1,size_msg.length()-size_msg.find(' ')-1).c_str());
+    cout<<"-----------------the file size is:"<<file_size<<"------------------"<<endl;
     //下面可以使用多线程了
+    cout<<"--------------------thread num is:"<<thread_num<<"----------------------"<<endl;
 
-    // //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
-    // ftp_cmd="PASV\n";
-    // memset(recv_buf,0,FTP_BUF_LEN);
-    // if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
-    //     return false;
-    // }
-    // //解析数据连接
-    // string data_ip;
-    // int data_port;
-    // if(!parse_link(recv_buf,data_ip,data_port)){
-    //     cout<<"error:can't parse pasv link"<<endl;
-    //     return false;
-    // }
-    // cout<<"get data sock:"<<data_ip<<':'<<data_port<<endl;
-    
+    int offset=file_size/thread_num;
+    thread threads[thread_num];
+    for(int i=0;i<thread_num;i++){
+        if(i==thread_num-1){
+            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset+1,file_size-i*offset,i);
+        }
+        else{
+            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset+1,offset,i);
+        }
+    }
+    cout<<"**********************start download***********************"<<endl;
+    for(thread &t:threads){
+        t.join();
+    }
+    //在所有线程完成下载后合并文件
 
     return true;
 }
 
 int main(int argc, char *argv[]){
     //全部段选项的合并字符，":"表示带有附加参数
-	const char* const short_opts = "hs:u:p:o:";
+	const char* const short_opts = "hs:u:p:o:t:";
 	//长选项数组，定义在前面注释已经标明
 	const struct option long_opts[] =
 	{
@@ -165,6 +199,7 @@ int main(int argc, char *argv[]){
         {"username",1,NULL,'u'},
         {"password",1,NULL,'p'},
         {"output",1,NULL,'o'},
+        {"thread",1,NULL,'t'},
         {NULL,0,NULL,0}
 	};
 	//参数指定的输出文件名
@@ -202,6 +237,9 @@ int main(int argc, char *argv[]){
         case 'p'://-p ftp服务器密码
             server_pwd = optarg;
             break;
+        case 't':
+            thread_num = optarg;
+            break;
         case '?'://用户输入了无效参数
             output_info(cerr,1);
         default://未知错误
@@ -215,8 +253,17 @@ int main(int argc, char *argv[]){
         cout<<"\nseem can't get hostname or filename\n\n";
         output_info(cout,1);
     }
+    
+    if(atoi(thread_num)<=0){
+        cout<<"\nerror thread num invalid."<<endl;
+        output_info(cout,1);
+    }
+    if(output_filename==NULL){
+        output_filename=filename;
+    }
     //获取到相应的文件,并保存在当前路径中
-    if(get_file(server_addr,sc_port,server_name,server_pwd,filename,output_filename)){
+    int thread=atoi(thread_num)>MAX_THREAD_NUM?MAX_THREAD_NUM:atoi(thread_num);
+    if(get_file(server_addr,sc_port,server_name,server_pwd,filename,output_filename,thread)){
         cout<<"download success."<<endl;
     }else{
         cout<<"download fail."<<endl;

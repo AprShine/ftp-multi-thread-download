@@ -14,6 +14,9 @@ Usage:./my-wget options [filename]
 
 + 测试语句
 
-```
+```sh
+# 单线程
 ./my-wget -s 124.221.244.253 pub/test_genshin.jpg
+# 多线程
+./my-wget -s 124.221.244.253 -t 2 pub/test_genshin.jpg
 ```
