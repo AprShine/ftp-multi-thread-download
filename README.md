@@ -9,6 +9,7 @@ Usage:./my-wget options [filename]
 -u --username:the ftp server's username
 -p --password:the ftp server's password
 -o --output:the save file's name <default filename>
+-t --thread:the download thread num
 ```
 如果未填写username则默认使用匿名模式(需要服务器支持)
 

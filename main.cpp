@@ -241,9 +241,11 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
         t.join();
     }
     ftp_cmd="QUIT\n";
-    control_link.ftp_send(ftp_cmd.c_str(),ftp_cmd.length());
+    if(!control_link.ftp_send(ftp_cmd.c_str(),ftp_cmd.length())){
+        cout<<"error:can't exit  normally,exit force."<<endl;
+    }
     //在所有线程完成下载后合并文件
-    
+    /********--------------------------------在这里进行文件的合并-------------------------------********/
     return true;
 }
 
