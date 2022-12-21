@@ -14,16 +14,19 @@
 #include <fstream>
 #include <thread>
 #include <mutex>
+#include <sys/stat.h>
 #include <string.h>
 #include <getopt.h>
 
 #define MAX_THREAD_NUM 8
-
+#define MAX_MEM_BUF 40960
 using namespace std;
 
 const char *program_name;
 const int sc_port=21;
+
 mutex download_mutex;
+const string temp_path="temp";
 
 void output_info(ostream & os,int exit_code){
     os<<"Usage:"<<program_name<<" options [filename]"<<endl;
@@ -65,6 +68,8 @@ bool parse_link(const string &ftp_msg, string &ip, int &port){
 bool thread_download(ftp &control_link,string filename,string local_fname,const int &offset,const int &size,const int &index){
     string ftp_cmd;
     char recv_buf[FTP_BUF_LEN]={0};
+    //非原子操作上锁
+    download_mutex.lock();
     //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
     ftp_cmd="PASV\n";
     memset(recv_buf,0,FTP_BUF_LEN);
@@ -83,6 +88,52 @@ bool thread_download(ftp &control_link,string filename,string local_fname,const 
     if(!data_link.ftp_connect(data_ip.c_str(),data_port)){
         cout<<"error:ftp data link open fail"<<endl;
         return false;
+    }
+    
+    ftp_cmd="TYPE I\n";
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        return false;
+    }else if(recv_buf[0]=='5'){
+        return false;
+    }
+    ftp_cmd="REST ";
+    ftp_cmd.append(to_string(offset)).append("\n");
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        return false;
+    }else if(recv_buf[0]=='5'){
+        return false;
+    }
+    ftp_cmd="RETR ";
+    ftp_cmd.append(filename).append("\n");
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        return false;
+    }else if(recv_buf[0]=='5'){
+        return false;
+    }
+    download_mutex.unlock();
+
+    FILE *fp=fopen((temp_path+"/"+to_string(index)+"_"+filename+".temp").c_str(),"wb+");
+    if(fp!=NULL){
+        int recv_already=0;
+        int recv_len=0;
+        char mem[MAX_MEM_BUF]={0};
+
+        while((recv_len=data_link.ftp_recv(mem,sizeof(mem)))>0){
+            if(recv_already+recv_len<size){
+                fwrite(mem,1,recv_len,fp);
+                fflush(fp);
+                memset(mem,0,sizeof(mem));
+                recv_already+=recv_len;
+            }else{
+                fwrite(mem,1,size-recv_already,fp);
+                data_link.ftp_disconnect();
+                break;
+            }
+        }
+        fclose(fp);
     }
     return true;
 }
@@ -168,23 +219,31 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     cout<<"-----------------the file size is:"<<file_size<<"------------------"<<endl;
     //下面可以使用多线程了
     cout<<"--------------------thread num is:"<<thread_num<<"----------------------"<<endl;
-
+    //创建缓存文件夹
+    struct stat st;
+    if(stat(temp_path.c_str(),&st)!=0){
+        string cmd="mkdir "+temp_path;
+        system(cmd.c_str());
+    }
+    
     int offset=file_size/thread_num;
     thread threads[thread_num];
     for(int i=0;i<thread_num;i++){
         if(i==thread_num-1){
-            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset+1,file_size-i*offset,i);
+            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset,file_size-i*offset,i);
         }
         else{
-            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset+1,offset,i);
+            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset,offset,i);
         }
     }
     cout<<"**********************start download***********************"<<endl;
     for(thread &t:threads){
         t.join();
     }
+    ftp_cmd="QUIT\n";
+    control_link.ftp_send(ftp_cmd.c_str(),ftp_cmd.length());
     //在所有线程完成下载后合并文件
-
+    
     return true;
 }
 
