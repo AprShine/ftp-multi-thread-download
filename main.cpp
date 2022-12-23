@@ -19,7 +19,7 @@
 #include <getopt.h>
 
 #define MAX_THREAD_NUM 8
-#define MAX_MEM_BUF 4096
+#define MAX_MEM_BUF 40960
 using namespace std;
 
 const char *program_name;
