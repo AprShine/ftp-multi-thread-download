@@ -179,7 +179,15 @@ bool thread_download(string username,string pwd,string server_ip,const int & por
                 break;
             }
         }
+        if(recv_len==-1){
+            cout<<"error:transport error."<<endl;
+            return false;
+        }
         fclose(fp);
+    }
+    ftp_cmd="QUIT\n";
+    if(!control_link.ftp_send(ftp_cmd.c_str(),ftp_cmd.length())){
+        cout<<"error:can't exit  normally,exit force."<<endl;
     }
     return true;
 }
@@ -264,7 +272,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     //获取完文件大小直接退出
     ftp_cmd="QUIT\n";
     if(!control_link.ftp_send(ftp_cmd.c_str(),ftp_cmd.length())){
-        cout<<"error:can't exit  normally,exit force."<<endl;
+        cout<<"error:can't exit normally,exit force."<<endl;
     }
     int file_size=atoi(size_msg.substr(size_msg.find(' ')+1,size_msg.length()-size_msg.find(' ')-1).c_str());
     cout<<"-----------------the file size is:"<<file_size<<"------------------"<<endl;
@@ -319,7 +327,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
             memset(buffer,0,sizeof(buffer));
         }
 		fclose(fp_part);
-		remove((temp_path+"/"+to_string(i)+"_"+remote_fname+".temp").c_str());
+		// remove((temp_path+"/"+to_string(i)+"_"+remote_fname+".temp").c_str());
     }
     fclose(fp);
     return true;
