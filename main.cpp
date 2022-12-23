@@ -65,14 +65,58 @@ bool parse_link(const string &ftp_msg, string &ip, int &port){
     return true;
 }
 
-bool thread_download(ftp &control_link,string filename,string local_fname,const int &offset,const int &size,const int &index){
+bool thread_download(string username,string pwd,string server_ip,const int & port,string filedir,string local_fname,const int &offset,const int &size,const int &index){
     string ftp_cmd;
     char recv_buf[FTP_BUF_LEN]={0};
+    ftp control_link=ftp();
+    //重新连接
+    if(!control_link.ftp_connect(server_ip.c_str(),port)){
+        //链接sock失败
+        cout<<"error:can't connect ftp server."<<endl;
+        return false;
+    }
+    if(control_link.ftp_recv(recv_buf,FTP_BUF_LEN)>0){
+        cout<<"get the server msg:"<<recv_buf;
+    }else{
+        cout<<"error:can't recv server login msg."<<endl;
+        return false;
+    }
+     //传输用户名
+    ftp_cmd="USER ";
+    ftp_cmd.append(username).append("\n");
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        cout<<"error:send username "<<username<<" failed:"<<recv_buf;
+        return false;
+    }
+    ftp_cmd="PASS ";
+    ftp_cmd.append(pwd).append("\n");
+    memset(recv_buf,0,FTP_BUF_LEN);
+    if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+        cout<<"error:login failed because:"<<recv_buf;
+        return false;
+    }
+    string remote_fname=filedir;
+    while(remote_fname.find('/')!=-1){
+        ftp_cmd="CWD ";
+        ftp_cmd.append(remote_fname.substr(0,remote_fname.find('/'))).append("\n");
+        remote_fname=remote_fname.substr(remote_fname.find('/')+1,remote_fname.length()-remote_fname.find("/")-1);
+        memset(recv_buf,0,FTP_BUF_LEN);
+        if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
+            cout<<"error:can't get server msg."<<endl;
+            return false;
+        }   
+        else if(recv_buf[0]=='5'){
+            cout<<"error:can't find the dictionary."<<endl;
+            return false;
+        }
+    }
+
     //非原子操作上锁
-    download_mutex.lock();
+    // download_mutex.lock();
     //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
     //清空网卡buf缓存,防止卡指令
-    control_link.ftp_recv(recv_buf,FTP_BUF_LEN);
+    // control_link.ftp_recv(recv_buf,FTP_BUF_LEN);
     ftp_cmd="PASV\n";
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
@@ -108,16 +152,16 @@ bool thread_download(ftp &control_link,string filename,string local_fname,const 
         return false;
     }
     ftp_cmd="RETR ";
-    ftp_cmd.append(filename).append("\n");
+    ftp_cmd.append(remote_fname).append("\n");
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
         return false;
     }else if(recv_buf[0]=='5'){
         return false;
     }
-    download_mutex.unlock();
+    // download_mutex.unlock();
 
-    FILE *fp=fopen((temp_path+"/"+to_string(index)+"_"+filename+".temp").c_str(),"wb+");
+    FILE *fp=fopen((temp_path+"/"+to_string(index)+"_"+remote_fname+".temp").c_str(),"wb+");
     if(fp!=NULL){
         int recv_already=0;
         int recv_len=0;
@@ -217,6 +261,11 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
         return false;
     }
     string size_msg=recv_buf;
+    //获取完文件大小直接退出
+    ftp_cmd="QUIT\n";
+    if(!control_link.ftp_send(ftp_cmd.c_str(),ftp_cmd.length())){
+        cout<<"error:can't exit  normally,exit force."<<endl;
+    }
     int file_size=atoi(size_msg.substr(size_msg.find(' ')+1,size_msg.length()-size_msg.find(' ')-1).c_str());
     cout<<"-----------------the file size is:"<<file_size<<"------------------"<<endl;
     //下面可以使用多线程了
@@ -232,19 +281,15 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     thread threads[thread_num];
     for(int i=0;i<thread_num;i++){
         if(i==thread_num-1){
-            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset,file_size-i*offset,i);
+            threads[i]=thread(thread_download,username,pwd,server_ip,port,remote_dir,local_fname,i*offset,file_size-i*offset,i);
         }
         else{
-            threads[i]=thread(thread_download,ref(control_link),remote_fname,local_fname,i*offset,offset,i);
+            threads[i]=thread(thread_download,username,pwd,server_ip,port,remote_dir,local_fname,i*offset,offset,i);
         }
     }
     cout<<"**********************start download***********************"<<endl;
     for(thread &t:threads){
         t.join();
-    }
-    ftp_cmd="QUIT\n";
-    if(!control_link.ftp_send(ftp_cmd.c_str(),ftp_cmd.length())){
-        cout<<"error:can't exit  normally,exit force."<<endl;
     }
     //在所有线程完成下载后合并文件
     /********--------------------------------在这里进行文件的合并-------------------------------********/
