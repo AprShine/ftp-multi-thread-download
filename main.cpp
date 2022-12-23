@@ -19,7 +19,7 @@
 #include <getopt.h>
 
 #define MAX_THREAD_NUM 8
-#define MAX_MEM_BUF 40960
+#define MAX_MEM_BUF 4096
 using namespace std;
 
 const char *program_name;
@@ -71,6 +71,8 @@ bool thread_download(ftp &control_link,string filename,string local_fname,const 
     //非原子操作上锁
     download_mutex.lock();
     //使用被动模式,并从服务器发送来的报文中获取数据传输的sock
+    //清空网卡buf缓存,防止卡指令
+    control_link.ftp_recv(recv_buf,FTP_BUF_LEN);
     ftp_cmd="PASV\n";
     memset(recv_buf,0,FTP_BUF_LEN);
     if(!control_link.ftp_talk(ftp_cmd.c_str(),ftp_cmd.length(),recv_buf,FTP_BUF_LEN)){
@@ -246,6 +248,35 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
     }
     //在所有线程完成下载后合并文件
     /********--------------------------------在这里进行文件的合并-------------------------------********/
+    cout<<"***********************start marge files************************"<<endl;
+    FILE *fp;
+    if(local_fname!="NULL"){
+        fp=fopen((temp_path+"/"+local_fname).c_str(),"wb+");
+    }else{
+        fp=fopen((temp_path+"/"+remote_fname).c_str(),"wb+");
+    }
+    if(fp==NULL){
+            cout<<"error:open file error."<<endl;
+            return false;
+        }
+    for(int i=0;i<thread_num;i++){
+        FILE *fp_part=fopen((temp_path+"/"+to_string(i)+"_"+remote_fname+".temp").c_str(),"rb");
+        if(fp_part==NULL){
+            cout<<"error:open file error."<<endl;
+            return false;
+        }
+        char buffer[MAX_MEM_BUF]={0};
+        int len=0;
+		while((len=fread(buffer,1,MAX_MEM_BUF,fp_part))>0){
+
+            fwrite(buffer,1,len,fp);
+            fflush(fp);
+            memset(buffer,0,sizeof(buffer));
+        }
+		fclose(fp_part);
+		remove((temp_path+"/"+to_string(i)+"_"+remote_fname+".temp").c_str());
+    }
+    fclose(fp);
     return true;
 }
 
@@ -320,7 +351,7 @@ int main(int argc, char *argv[]){
         output_info(cout,1);
     }
     if(output_filename==NULL){
-        output_filename=filename;
+        output_filename="NULL";
     }
     //获取到相应的文件,并保存在当前路径中
     int thread=atoi(thread_num)>MAX_THREAD_NUM?MAX_THREAD_NUM:atoi(thread_num);
