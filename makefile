@@ -1,5 +1,6 @@
 STD=-std=c++11
 INCLUDE=-I ./
+LIB=-lpthread
 TARGET=my-wget
 OBJ=main.o ftp.o
 
