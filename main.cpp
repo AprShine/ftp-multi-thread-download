@@ -327,7 +327,7 @@ bool get_file(const char* server_ip,const int &port,const char *username,const c
             memset(buffer,0,sizeof(buffer));
         }
 		fclose(fp_part);
-		// remove((temp_path+"/"+to_string(i)+"_"+remote_fname+".temp").c_str());
+		remove((temp_path+"/"+to_string(i)+"_"+remote_fname+".temp").c_str());
     }
     fclose(fp);
     return true;
